@@ -1,12 +1,38 @@
 # Backup AI Artifacts
 
+**Back up your AI coding assistant chats, memory, skills and settings with one double-click, or one sentence to your AI agent.**
+
+[![Latest release](https://img.shields.io/github/v/release/ciellosinc/BackupAIArtifacts)](https://github.com/ciellosinc/BackupAIArtifacts/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows)
+![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-5391FE?logo=powershell&logoColor=white)
+![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+
 PowerShell scripts that back up the local data of AI coding assistants on Windows to ZIP files:
 
-- **Claude Code**
-- **Cursor**
-- **GitHub Copilot** in VS Code (and VS Code Insiders) plus the Copilot CLI
+- **Claude Code**: chats, memory, skills, agents, plugins, plans, settings, sign-in
+- **Cursor**: all chats, rules, skills, MCP config, settings, sign-in
+- **GitHub Copilot** in VS Code (and VS Code Insiders) plus the Copilot CLI: chats, prompts, memory, MCP config, settings
 
-Chats, settings, memory, rules, skills, MCP configuration and sign-ins of these tools live only in your user profile. A new device, a reset or a reinstall loses them. By default the ZIPs go to an `AI backup` folder in your OneDrive, and the OneDrive app uploads them.
+## Why
+
+Months of chats, tuned rules, custom skills and MCP setups live only in your user profile. **None of these tools syncs them to the cloud.** A new laptop, a Windows reset or a reinstall loses them. Claude Code also deletes chats older than 30 days by default.
+
+This project saves all of it to ZIP files in an `AI backup` folder in your OneDrive, and the OneDrive app uploads them.
+
+- **One click:** `Backup-AIArtifacts.cmd` backs up every installed tool and skips the rest.
+- **Agent-ready:** tell Claude Code, Cursor or Copilot *"Run this script locally for all agents, then upload the backup files to my OneDrive"*, and it follows the [steps below](#instructions-for-ai-agents).
+- **Safe:** it waits for the editors to close so the chat databases are copied in a consistent state, and it builds each ZIP in `%TEMP%` so OneDrive never uploads a half-written file.
+- **Fast:** with 7-Zip installed, it compresses 4 GB of Cursor data in about 45 seconds. Without it, built-in .NET is used.
+- **Easy restore:** the ZIP layout mirrors your user profile, and every ZIP includes restore steps.
+- **Nothing to install:** works with the Windows PowerShell that comes with Windows.
+
+```text
+== Claude Code
+   2,550 files, 378 MB
+   Compressing with 7-Zip 26.04 -mx1
+   Saved: ...\OneDrive\AI backup\AI-backup-ClaudeCode-PC1-20261016-1556.zip (127 MB, 2,550 files, 3.5 s)
+```
 
 > [!WARNING]
 > The ZIP files contain sign-in tokens (Claude Code `.credentials.json`, Cursor's sign-in in `state.vscdb`). Keep them in your own OneDrive or another private place. Don't share them and don't commit them to git (`.gitignore` excludes `*.zip`).
@@ -20,7 +46,7 @@ Chats, settings, memory, rules, skills, MCP configuration and sign-ins of these 
 
 ## Quick start (people)
 
-1. Download or clone this repository.
+1. Download `BackupAIArtifacts-<version>.zip` from the [latest release](https://github.com/ciellosinc/BackupAIArtifacts/releases/latest) and extract it, or clone this repository. Tip: before you extract, right-click the downloaded ZIP, open **Properties** and select **Unblock**. This stops Windows from warning about the scripts.
 2. Double-click `Backup-AIArtifacts.cmd`. It runs the three backups one after the other and skips tools that aren't installed.
 3. When it asks, close all Cursor and VS Code windows. The backup continues by itself once they are closed.
 4. Wait until OneDrive shows the files in `AI backup` as synced (green check mark).
@@ -62,6 +88,19 @@ Get-Process OneDrive -ErrorAction SilentlyContinue | Select-Object -First 1 Name
 ```powershell
 $dest = Join-Path $env:OneDriveCommercial 'AI backup'   # or $env:OneDriveConsumer
 ```
+
+Get the web address of that folder, to give the user a link and to check the upload in step 7. For work or school OneDrive, the OneDrive app stores the site address in the registry, under the account whose `UserFolder` is the OneDrive folder you chose:
+
+```powershell
+$root = $env:OneDriveCommercial
+$acct = Get-ChildItem 'HKCU:\Software\Microsoft\OneDrive\Accounts' | Get-ItemProperty |
+    Where-Object { $_.UserFolder -eq $root -and $_.ServiceEndpointUri } | Select-Object -First 1
+$site = $acct.ServiceEndpointUri -replace '/_api$', ''   # https://<tenant>-my.sharepoint.com/personal/<user>
+$webUrl = $site + '/_layouts/15/onedrive.aspx?id=' + [uri]::EscapeDataString(([uri]$site).AbsolutePath + '/Documents/AI backup')
+$webUrl
+```
+
+For personal OneDrive, or if `$acct` is empty, use `https://onedrive.live.com` (personal) or `https://www.office.com/onedrive` (work or school), and tell the user to open **My files** > **AI backup**.
 
 ### 3. Dry run
 
@@ -115,7 +154,15 @@ Get-ChildItem $dest -Filter 'AI-backup-*.zip' | Sort-Object LastWriteTime | Sele
 
 ### 7. Upload
 
-The OneDrive app uploads the files in `$dest` by itself. Tell the user where the files are, and to wait until OneDrive shows them as synced (green check mark in Explorer, or the files visible on the OneDrive website) before resetting or handing over the device.
+The OneDrive app uploads the files in `$dest` by itself. Check that they arrived:
+
+1. Wait a few minutes after the last `Saved:` line. A ZIP of several hundred MB takes a while to upload.
+2. Open `$webUrl` from step 2:
+   - If you have a browser tool (for example Claude in Chrome), open the link in a new tab yourself. Check that every `AI-backup-*.zip` from step 6 is listed with the same size. The user is already signed in to their browser.
+   - Otherwise run `Start-Process $webUrl` to open it in the user's default browser, and ask them to confirm the files and sizes.
+3. Missing a file, or its size is too small? It's still uploading. Check again later, or ask the user to look at the OneDrive icon in the taskbar.
+
+Then give the user the link and tell them where the files are. Say they shouldn't reset or hand over the device until every ZIP is on the OneDrive website.
 
 ## Restore
 
