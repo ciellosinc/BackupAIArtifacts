@@ -1,4 +1,5 @@
 * text=auto
-# Windows scripts: CRLF in checkouts and in GitHub ZIP downloads (cmd.exe misparses LF-only batch files)
-*.cmd text eol=crlf
-*.ps1 text eol=crlf
+# Windows scripts are stored with CRLF as-is: GitHub ZIP downloads do not convert line endings,
+# and cmd.exe can misparse LF-only batch files.
+*.cmd -text
+*.ps1 -text
